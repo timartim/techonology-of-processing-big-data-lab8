@@ -11,6 +11,8 @@ DASHBOARD_PORT="${DASHBOARD_PORT:-8443}"
 SPARK_UI_PORT="${SPARK_UI_PORT:-4040}"
 MONGO_EXPRESS_PORT="${MONGO_EXPRESS_PORT:-8081}"
 RUN_SPARK_JOB="${RUN_SPARK_JOB:-0}"
+RESET_K8S_RESOURCES="${RESET_K8S_RESOURCES:-1}"
+RESET_DASHBOARD="${RESET_DASHBOARD:-1}"
 
 PIDS=()
 
@@ -67,6 +69,50 @@ pick_port() {
 
   echo "Could not find a free local port for ${label} starting from ${preferred}." >&2
   return 1
+}
+
+reset_k8s_resources() {
+  if [[ "${RESET_K8S_RESOURCES}" != "1" ]]; then
+    echo "Skipping Kubernetes resource cleanup because RESET_K8S_RESOURCES=${RESET_K8S_RESOURCES}."
+    return 0
+  fi
+
+  echo "Cleaning previous lab resources in namespace ${NAMESPACE}..."
+  kubectl delete namespace "${NAMESPACE}" --ignore-not-found
+
+  for _ in $(seq 1 120); do
+    if ! kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+
+  if kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1; then
+    echo "Namespace ${NAMESPACE} is still terminating. Check finalizers with:"
+    echo "  kubectl get namespace ${NAMESPACE} -o yaml"
+    exit 1
+  fi
+
+  if [[ "${RESET_DASHBOARD}" == "1" ]]; then
+    echo "Cleaning previous Kubernetes Dashboard resources..."
+    kubectl delete namespace "${DASHBOARD_NAMESPACE}" --ignore-not-found
+    for _ in $(seq 1 120); do
+      if ! kubectl get namespace "${DASHBOARD_NAMESPACE}" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
+  fi
+}
+
+cleanup_stale_port_forwards() {
+  echo "Stopping stale lab port-forwards if any..."
+  pkill -f "kubectl.*port-forward.*lab8-spark" >/dev/null 2>&1 || true
+  pkill -f "kubectl.*port-forward.*kubernetes-dashboard" >/dev/null 2>&1 || true
+  pkill -f "kubectl.*port-forward.*model-service" >/dev/null 2>&1 || true
+  pkill -f "kubectl.*port-forward.*mongo-express" >/dev/null 2>&1 || true
+  pkill -f "kubectl.*port-forward.*kubernetes-dashboard-kong-proxy" >/dev/null 2>&1 || true
+  sleep 1
 }
 
 start_port_forward() {
@@ -150,6 +196,9 @@ fi
 
 echo "Using minikube context..."
 kubectl config use-context minikube >/dev/null
+
+cleanup_stale_port_forwards
+reset_k8s_resources
 
 SERVICE_PORT="$(pick_port "${SERVICE_PORT}" "model service Swagger")"
 DASHBOARD_PORT="$(pick_port "${DASHBOARD_PORT}" "Kubernetes Dashboard")"
