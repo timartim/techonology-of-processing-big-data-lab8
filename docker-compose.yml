@@ -1,0 +1,71 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: lab8-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mongo-express:
+    image: mongo-express:1
+    container_name: lab8-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  model-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lab8-spark-model:latest
+    container_name: lab8-model-service
+    ports:
+      - "8000:8000"
+    environment:
+      MODEL_SERVICE_CONFIG: /opt/app/src/spark/config.json
+      MONGO_URI: mongodb://mongodb:27017/openfoodfacts
+      MONGO_DATABASE: openfoodfacts
+    volumes:
+      - ./src/spark:/opt/app/src/spark
+      - ./src/data:/opt/app/src/data
+      - ./src/artifacts:/opt/app/src/artifacts
+      - ./src/models:/opt/app/src/models
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  trainer:
+    image: lab8-spark-model:latest
+    container_name: lab8-trainer
+    profiles:
+      - train
+    command: ["python", "main.py", "train"]
+    environment:
+      MONGO_URI: mongodb://mongodb:27017/openfoodfacts
+      MONGO_DATABASE: openfoodfacts
+    volumes:
+      - ./src/spark:/opt/app/src/spark
+      - ./src/data:/opt/app/src/data
+      - ./src/artifacts:/opt/app/src/artifacts
+      - ./src/models:/opt/app/src/models
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongodb_data:

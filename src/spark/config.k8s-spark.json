@@ -15,6 +15,17 @@
     "predictions_csv_path": "../../shared/artifacts/food_predictions.csv",
     "model_root": "../models/openfoodfacts_kmeans"
   },
+  "mongo": {
+    "uri": "mongodb://mongodb:27017/openfoodfacts",
+    "database": "openfoodfacts",
+    "training_collection": "training_data",
+    "clusters_collection": "training_clusters",
+    "profiles_collection": "cluster_profiles",
+    "centers_collection": "cluster_centers",
+    "metrics_collection": "training_metrics",
+    "model_info_collection": "model_info",
+    "prediction_summary_collection": "prediction_summary"
+  },
   "preprocessing": {
     "min_non_null_ratio": 0.9,
     "target_n": 100000,

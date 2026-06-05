@@ -9,6 +9,7 @@ DATA_FILE="${DATA_FILE:-${ROOT_DIR}/src/data/food_small.parquet}"
 SERVICE_PORT="${SERVICE_PORT:-8000}"
 DASHBOARD_PORT="${DASHBOARD_PORT:-8443}"
 SPARK_UI_PORT="${SPARK_UI_PORT:-4040}"
+MONGO_EXPRESS_PORT="${MONGO_EXPRESS_PORT:-8081}"
 RUN_SPARK_JOB="${RUN_SPARK_JOB:-0}"
 
 PIDS=()
@@ -27,6 +28,45 @@ need_command() {
     echo "$1 is not installed."
     exit 1
   }
+}
+
+is_port_free() {
+  python3 - "$1" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+for host in ("127.0.0.1", "::1"):
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    try:
+        sock.bind((host, port))
+    except OSError:
+        sys.exit(1)
+    finally:
+        sock.close()
+sys.exit(0)
+PY
+}
+
+pick_port() {
+  local preferred="$1"
+  local label="$2"
+  local port="${preferred}"
+
+  for _ in $(seq 1 100); do
+    if is_port_free "${port}"; then
+      if [[ "${port}" != "${preferred}" ]]; then
+        echo "Port ${preferred} for ${label} is busy, using ${port} instead." >&2
+      fi
+      echo "${port}"
+      return 0
+    fi
+    port=$((port + 1))
+  done
+
+  echo "Could not find a free local port for ${label} starting from ${preferred}." >&2
+  return 1
 }
 
 start_port_forward() {
@@ -101,6 +141,7 @@ wait_and_start_spark_ui_forward() {
 need_command kubectl
 need_command docker
 need_command minikube
+need_command python3
 
 if ! minikube status >/dev/null 2>&1; then
   echo "Starting minikube with Docker driver..."
@@ -109,6 +150,11 @@ fi
 
 echo "Using minikube context..."
 kubectl config use-context minikube >/dev/null
+
+SERVICE_PORT="$(pick_port "${SERVICE_PORT}" "model service Swagger")"
+DASHBOARD_PORT="$(pick_port "${DASHBOARD_PORT}" "Kubernetes Dashboard")"
+SPARK_UI_PORT="$(pick_port "${SPARK_UI_PORT}" "Spark UI")"
+MONGO_EXPRESS_PORT="$(pick_port "${MONGO_EXPRESS_PORT}" "Mongo Express")"
 
 echo "Building ${IMAGE_NAME} inside minikube Docker daemon..."
 eval "$(minikube docker-env)"
@@ -120,6 +166,8 @@ kubectl delete -f k8s/spark-predict-job.yaml --ignore-not-found >/dev/null
 kubectl delete pod -n "${NAMESPACE}" -l spark-role=driver --ignore-not-found >/dev/null
 kubectl delete pod -n "${NAMESPACE}" -l spark-role=executor --ignore-not-found >/dev/null
 kubectl delete svc -n "${NAMESPACE}" -l spark-role=driver --ignore-not-found >/dev/null
+kubectl rollout status deployment/mongodb -n "${NAMESPACE}" --timeout=180s
+kubectl rollout status deployment/mongo-express -n "${NAMESPACE}" --timeout=180s
 kubectl rollout restart deployment/model-service -n "${NAMESPACE}"
 kubectl rollout status deployment/model-service -n "${NAMESPACE}" --timeout=180s
 
@@ -149,6 +197,11 @@ if command -v helm >/dev/null 2>&1; then
   kubectl rollout status deployment/kubernetes-dashboard-web -n "${DASHBOARD_NAMESPACE}" --timeout=300s
 
   DASHBOARD_TOKEN="$(kubectl -n "${DASHBOARD_NAMESPACE}" create token admin-user)"
+  cat <<EOF
+
+Kubernetes Dashboard token:
+${DASHBOARD_TOKEN}
+EOF
 else
   echo "helm is not installed, skipping Kubernetes Dashboard installation."
   echo "Install it with: brew install helm"
@@ -170,6 +223,11 @@ start_port_forward \
   "model service Swagger pod ${MODEL_SERVICE_POD}" \
   "kubectl port-forward -n ${NAMESPACE} pod/${MODEL_SERVICE_POD} ${SERVICE_PORT}:8000" \
   "/tmp/lab8-model-service-port-forward.log"
+
+start_port_forward \
+  "Mongo Express" \
+  "kubectl port-forward -n ${NAMESPACE} svc/mongo-express ${MONGO_EXPRESS_PORT}:8081" \
+  "/tmp/lab8-mongo-express-port-forward.log"
 
 if [[ -n "${DASHBOARD_TOKEN}" ]]; then
   start_port_forward \
@@ -221,6 +279,10 @@ Model service:
 Kubernetes:
   kubectl get pods -n ${NAMESPACE}
   kubectl get deployment,svc,pvc -n ${NAMESPACE}
+
+MongoDB:
+  Mongo Express: http://localhost:${MONGO_EXPRESS_PORT}
+  Login: admin / admin
 EOF
 
 if [[ -n "${DASHBOARD_TOKEN}" ]]; then

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import json
+import os
 
 
 @dataclass
@@ -25,6 +26,19 @@ class DataConfig:
 
 
 @dataclass
+class MongoConfig:
+    uri: str
+    database: str
+    training_collection: str
+    clusters_collection: str
+    profiles_collection: str
+    centers_collection: str
+    metrics_collection: str
+    model_info_collection: str
+    prediction_summary_collection: str
+
+
+@dataclass
 class PreprocessingConfig:
     min_non_null_ratio: float
     target_n: int
@@ -44,6 +58,7 @@ class TrainingConfig:
 class AppConfig:
     spark: SparkConfig
     data: DataConfig
+    mongo: MongoConfig
     preprocessing: PreprocessingConfig
     training: TrainingConfig
     base_dir: Path
@@ -55,9 +70,14 @@ def load_config(config_path: str | None = None) -> AppConfig:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    mongo_data = data["mongo"]
+    mongo_data["uri"] = os.getenv("MONGO_URI", mongo_data["uri"])
+    mongo_data["database"] = os.getenv("MONGO_DATABASE", mongo_data["database"])
+
     return AppConfig(
         spark=SparkConfig(**data["spark"]),
         data=DataConfig(**data["data"]),
+        mongo=MongoConfig(**mongo_data),
         preprocessing=PreprocessingConfig(**data["preprocessing"]),
         training=TrainingConfig(**data["training"]),
         base_dir=path.parent.resolve(),

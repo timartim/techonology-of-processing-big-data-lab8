@@ -2,3 +2,4 @@ pyspark==4.1.1
 numpy==2.2.5
 fastapi==0.115.6
 uvicorn==0.34.0
+pymongo==4.10.1

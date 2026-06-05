@@ -44,6 +44,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: MONGO_URI
+              value: mongodb://mongodb:27017/openfoodfacts
+            - name: MONGO_DATABASE
+              value: openfoodfacts
           readinessProbe:
             httpGet:
               path: /health

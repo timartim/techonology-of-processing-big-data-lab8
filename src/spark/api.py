@@ -39,7 +39,7 @@ def predict(request: PredictRequest):
     cfg = load_config(get_config_path())
     service = FoodClusterService(cfg)
 
-    service.predict(
+    summary = service.predict(
         model_path=request.model_path or cfg.data.model_root,
         input_path=request.input_path,
         output_path=request.output_path,
@@ -50,4 +50,6 @@ def predict(request: PredictRequest):
     return {
         "status": "done",
         "output_path": str(output_path),
+        "mongo_collection": cfg.mongo.prediction_summary_collection,
+        "prediction_summary": summary,
     }

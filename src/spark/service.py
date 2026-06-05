@@ -8,6 +8,7 @@ from pyspark.sql import functions as F
 
 from app_config import AppConfig
 from artifact_writer import ArtifactWriter
+from mongo_storage import MongoStorage
 from preprocessing import FoodPreprocessor
 from spark_session import SparkManager
 
@@ -108,6 +109,7 @@ class FoodClusterService:
 
     def train(self):
         spark = SparkManager(self.cfg.spark).create_session()
+        mongo = MongoStorage(self.cfg.mongo)
         try:
             input_path = self._resolve(self.cfg.data.input_path)
             clusters_csv_path = self._resolve(self.cfg.data.clusters_csv_path)
@@ -115,9 +117,28 @@ class FoodClusterService:
             centers_csv_path = self._resolve(self.cfg.data.centers_csv_path)
             metrics_json_path = self._resolve(self.cfg.data.metrics_json_path)
 
-            raw = spark.read.parquet(str(input_path))
+            parquet_raw = spark.read.parquet(str(input_path))
+            imported_rows = mongo.replace_training_data(parquet_raw, source_path=str(input_path))
+            print(
+                f"В MongoDB сохранен parquet для обучения: "
+                f"{self.cfg.mongo.training_collection}, rows={imported_rows}"
+            )
 
-            df, feature_cols, product_col_names, total_rows = self.preprocessor.prepare_training_frame(raw)
+            parquet_training_df, feature_cols, product_col_names, total_rows = self.preprocessor.prepare_training_frame(parquet_raw)
+            parquet_training_df.unpersist()
+
+            mongo_columns = feature_cols.copy()
+            if "product_name" in parquet_raw.columns:
+                mongo_columns.append("product_name")
+
+            mongo_raw = mongo.load_training_data(spark, columns=mongo_columns)
+            print(f"Данные для обучения загружены из MongoDB: {self.cfg.mongo.training_collection}")
+
+            df = self.preprocessor.prepare_inference_frame(
+                raw=mongo_raw,
+                feature_cols=feature_cols,
+                expected_product_cols=product_col_names,
+            )
             df, working_n = self.preprocessor.sample_frame(
                 df,
                 target_n=self.cfg.preprocessing.target_n,
@@ -169,6 +190,13 @@ class FoodClusterService:
                 },
             }
             ArtifactWriter.save_json(model_info, paths["model_info"])
+            mongo.save_training_results(
+                clusters_df=clusters_df,
+                profiles_df=profiles_df,
+                centers_df=centers_df,
+                metrics=metrics,
+                model_info=model_info,
+            )
 
             print(f"Сохранен файл: {clusters_csv_path}")
             print(f"Сохранен файл: {profiles_csv_path}")
@@ -178,8 +206,13 @@ class FoodClusterService:
             print(f"Сохранена модель imputera: {paths['imputer_model']}")
             print(f"Сохранена модель scaler: {paths['scaler_model']}")
             print(f"Сохранен файл: {paths['model_info']}")
+            print("Результаты обучения сохранены в MongoDB")
         finally:
-            spark.stop()
+            mongo.close()
+            try:
+                spark.stop()
+            except Exception:
+                pass
 
     def predict(
         self,
@@ -187,8 +220,10 @@ class FoodClusterService:
         input_path: str | None = None,
         output_path: str | None = None,
         keep_alive: bool = False,
-    ):
+    ) -> dict:
         spark = SparkManager(self.cfg.spark).create_session()
+        mongo = MongoStorage(self.cfg.mongo)
+        summary = {}
         try:
             paths = self._model_paths(model_path)
 
@@ -226,8 +261,20 @@ class FoodClusterService:
             predictions_df = predictions.select(*cols_to_save)
 
             ArtifactWriter.write_single_csv(predictions_df, resolved_output)
+            summary = mongo.save_prediction_summary(
+                predictions_df=predictions_df,
+                model_path=str(paths["root"]),
+                input_path=str(resolved_input),
+                output_path=str(resolved_output),
+            )
 
             print(f"Сохранен файл с предсказаниями: {resolved_output}")
+            print(
+                f"Сводка предсказаний сохранена в MongoDB: "
+                f"{self.cfg.mongo.prediction_summary_collection}, run_id={summary['run_id']}"
+            )
+            return summary
         finally:
+            mongo.close()
             if not keep_alive:
                 spark.stop()
