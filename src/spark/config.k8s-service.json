@@ -1,0 +1,40 @@
+{
+  "spark": {
+    "app_name": "OpenFoodFacts-KMeans-Service",
+    "master": "k8s://https://kubernetes.default.svc:443",
+    "driver_memory": "1g",
+    "shuffle_partitions": "4",
+    "log_level": "WARN",
+    "conf": {
+      "spark.kubernetes.namespace": "lab8-spark",
+      "spark.kubernetes.authenticate.driver.serviceAccountName": "spark",
+      "spark.kubernetes.container.image": "lab8-spark-model:latest",
+      "spark.kubernetes.container.image.pullPolicy": "IfNotPresent",
+      "spark.executor.instances": "1",
+      "spark.executor.memory": "768m",
+      "spark.kubernetes.executor.volumes.persistentVolumeClaim.shared-data.options.claimName": "lab8-data-pvc",
+      "spark.kubernetes.executor.volumes.persistentVolumeClaim.shared-data.mount.path": "/opt/app/shared"
+    }
+  },
+  "data": {
+    "input_path": "../../shared/data/food_small.parquet",
+    "clusters_csv_path": "../../shared/artifacts/food_clusters.csv",
+    "profiles_csv_path": "../../shared/artifacts/food_cluster_profiles.csv",
+    "centers_csv_path": "../../shared/artifacts/food_cluster_centers.csv",
+    "metrics_json_path": "../../shared/artifacts/food_metrics.json",
+    "predictions_csv_path": "../../shared/artifacts/food_predictions.csv",
+    "model_root": "../models/openfoodfacts_kmeans"
+  },
+  "preprocessing": {
+    "min_non_null_ratio": 0.9,
+    "target_n": 100000,
+    "imputer_strategy": "median"
+  },
+  "training": {
+    "k_min": 2,
+    "k_max": 90,
+    "seed": 42,
+    "metric_name": "silhouette",
+    "distance_measure": "squaredEuclidean"
+  }
+}

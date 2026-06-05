@@ -181,7 +181,13 @@ class FoodClusterService:
         finally:
             spark.stop()
 
-    def predict(self, model_path: str, input_path: str | None = None, output_path: str | None = None):
+    def predict(
+        self,
+        model_path: str,
+        input_path: str | None = None,
+        output_path: str | None = None,
+        keep_alive: bool = False,
+    ):
         spark = SparkManager(self.cfg.spark).create_session()
         try:
             paths = self._model_paths(model_path)
@@ -223,5 +229,5 @@ class FoodClusterService:
 
             print(f"Сохранен файл с предсказаниями: {resolved_output}")
         finally:
-            pass
-            spark.stop()
+            if not keep_alive:
+                spark.stop()

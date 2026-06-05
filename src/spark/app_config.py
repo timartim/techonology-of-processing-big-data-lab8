@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import json
 
@@ -10,6 +10,7 @@ class SparkConfig:
     driver_memory: str
     shuffle_partitions: str
     log_level: str
+    conf: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

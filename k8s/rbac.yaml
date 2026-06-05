@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark
+  namespace: lab8-spark
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spark-driver
+  namespace: lab8-spark
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-driver
+  namespace: lab8-spark
+subjects:
+  - kind: ServiceAccount
+    name: spark
+    namespace: lab8-spark
+roleRef:
+  kind: Role
+  name: spark-driver
+  apiGroup: rbac.authorization.k8s.io

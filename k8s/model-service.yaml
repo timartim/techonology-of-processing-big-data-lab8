@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-service
+  namespace: lab8-spark
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: model-service
+  template:
+    metadata:
+      labels:
+        app: model-service
+    spec:
+      serviceAccountName: spark
+      initContainers:
+        - name: prepare-shared-volume
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - mkdir -p /opt/app/shared/data /opt/app/shared/artifacts && chown -R 185:0 /opt/app/shared && chmod -R g+rwX /opt/app/shared
+          volumeMounts:
+            - name: shared-data
+              mountPath: /opt/app/shared
+      containers:
+        - name: model-service
+          image: lab8-spark-model:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: spark-ui
+              containerPort: 4040
+          env:
+            - name: SPARK_DRIVER_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SPARK_DRIVER_BIND_ADDRESS
+              value: "0.0.0.0"
+            - name: SPARK_DRIVER_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "768Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /opt/app/shared
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: lab8-data-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-service
+  namespace: lab8-spark
+spec:
+  type: ClusterIP
+  selector:
+    app: model-service
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

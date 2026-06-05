@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: data-loader
+  namespace: lab8-spark
+spec:
+  restartPolicy: Never
+  containers:
+    - name: loader
+      image: busybox:1.36
+      command: ["sh", "-c", "mkdir -p /opt/app/shared/data /opt/app/shared/artifacts && chown -R 185:0 /opt/app/shared && chmod -R g+rwX /opt/app/shared && sleep 3600"]
+      volumeMounts:
+        - name: shared-data
+          mountPath: /opt/app/shared
+  volumes:
+    - name: shared-data
+      persistentVolumeClaim:
+        claimName: lab8-data-pvc

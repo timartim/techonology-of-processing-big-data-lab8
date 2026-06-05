@@ -1,0 +1,9 @@
+.git
+.idea
+__pycache__
+*.pyc
+.venv
+venv
+src/data
+src/artifacts/*.csv
+src/artifacts/*.json

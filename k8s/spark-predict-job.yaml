@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: spark-model-predict
+  namespace: lab8-spark
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: spark-model-predict
+    spec:
+      restartPolicy: Never
+      serviceAccountName: spark
+      containers:
+        - name: spark-submit
+          image: lab8-spark-model:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /opt/spark/bin/spark-submit
+          args:
+            - --master
+            - k8s://https://kubernetes.default.svc:443
+            - --deploy-mode
+            - cluster
+            - --name
+            - openfoodfacts-kmeans-predict
+            - --conf
+            - spark.kubernetes.namespace=lab8-spark
+            - --conf
+            - spark.kubernetes.authenticate.driver.serviceAccountName=spark
+            - --conf
+            - spark.kubernetes.container.image=lab8-spark-model:latest
+            - --conf
+            - spark.kubernetes.container.image.pullPolicy=IfNotPresent
+            - --conf
+            - spark.executor.instances=2
+            - --conf
+            - spark.executor.memory=1536m
+            - --conf
+            - spark.driver.memory=1536m
+            - --conf
+            - spark.kubernetes.driver.volumes.persistentVolumeClaim.shared-data.options.claimName=lab8-data-pvc
+            - --conf
+            - spark.kubernetes.driver.volumes.persistentVolumeClaim.shared-data.mount.path=/opt/app/shared
+            - --conf
+            - spark.kubernetes.executor.volumes.persistentVolumeClaim.shared-data.options.claimName=lab8-data-pvc
+            - --conf
+            - spark.kubernetes.executor.volumes.persistentVolumeClaim.shared-data.mount.path=/opt/app/shared
+            - local:///opt/app/src/spark/main.py
+            - --config
+            - /opt/app/src/spark/config.k8s-spark.json
+            - predict
+            - --model-path
+            - ../models/openfoodfacts_kmeans
+            - --input
+            - ../../shared/data/food_small.parquet
+            - --output
+            - ../../shared/artifacts/food_predictions.csv
