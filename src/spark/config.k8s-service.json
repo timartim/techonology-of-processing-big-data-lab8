@@ -11,7 +11,10 @@
       "spark.kubernetes.container.image": "lab8-spark-model:latest",
       "spark.kubernetes.container.image.pullPolicy": "IfNotPresent",
       "spark.executor.instances": "1",
+      "spark.executor.cores": "1",
       "spark.executor.memory": "768m",
+      "spark.kubernetes.executor.request.cores": "500m",
+      "spark.kubernetes.executor.limit.cores": "1",
       "spark.kubernetes.executor.volumes.persistentVolumeClaim.shared-data.options.claimName": "lab8-data-pvc",
       "spark.kubernetes.executor.volumes.persistentVolumeClaim.shared-data.mount.path": "/opt/app/shared"
     }

@@ -51,8 +51,8 @@ spec:
             periodSeconds: 20
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: "90m"
+              memory: "128Mi"
             limits:
               cpu: "1"
               memory: "1Gi"
@@ -112,10 +112,10 @@ spec:
               value: admin
           resources:
             requests:
-              cpu: "100m"
-              memory: "128Mi"
+              cpu: "2m"
+              memory: "80Mi"
             limits:
-              cpu: "500m"
+              cpu: "250m"
               memory: "512Mi"
 ---
 apiVersion: v1

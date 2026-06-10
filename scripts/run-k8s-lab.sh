@@ -377,9 +377,14 @@ cat <<EOF
 Logs:
   Model service: kubectl logs -n ${NAMESPACE} deploy/model-service --tail=120
   Spark job:     kubectl logs -n ${NAMESPACE} job/spark-model-predict
+  Resources:     ./scripts/k8s-resource-usage.sh ${NAMESPACE}
 
 Press Ctrl+C to stop port-forwards.
 EOF
+
+echo
+./scripts/k8s-resource-usage.sh "${NAMESPACE}" || true
+echo
 
 while true; do
   sleep 60

@@ -62,11 +62,11 @@ spec:
             periodSeconds: 30
           resources:
             requests:
-              cpu: "500m"
-              memory: "768Mi"
+              cpu: "20m"
+              memory: "64Mi"
             limits:
-              cpu: "2"
-              memory: "2Gi"
+              cpu: "1"
+              memory: "1536Mi"
           volumeMounts:
             - name: shared-data
               mountPath: /opt/app/shared
